@@ -48,6 +48,6 @@ gh release create v1.0.7 --repo seangritthy/vdomov-android-app app-release.apk v
 ## 🛡️ Integrated Security & Features
 - **OriginGuard AdBlocker**: Dynamic blocklist downloader from StevenBlack hosts (15,000+ domains).
 - **Anti-Redirect Shield**: Popup confirmation dialog before opening external redirect links.
-- **In-App Auto-Updater**: Automatic GitHub Release version checking against `seangritthy/vdomov-apks`.
+- **In-App Auto-Updater**: Automatic GitHub Release version checking against `seangritthy/vdomov-apks` with direct Package Installer targeting to bypass app chooser dialogs.
 - **Android TV D-Pad Focus**: Non-touchscreen Leanback launcher support.
 - **Windows PC 1-Click Installer**: NSIS compiled installer (`pc_build/vdomov_pc_installer.nsi`).
