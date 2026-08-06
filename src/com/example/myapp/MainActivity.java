@@ -31,6 +31,11 @@ public class MainActivity extends Activity {
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
 
+        // TV Remote D-Pad Focus configuration
+        webView.setFocusable(true);
+        webView.setFocusableInTouchMode(true);
+        webView.requestFocus(View.FOCUS_DOWN);
+
         try {
             AdBlocker.init(this);
         } catch (Exception e) {
@@ -53,7 +58,7 @@ public class MainActivity extends Activity {
             
             webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
             webSettings.setSupportMultipleWindows(false);
-            webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/2.0");
+            webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/2.0 AndroidTV");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -143,31 +148,25 @@ public class MainActivity extends Activity {
     private boolean handleUrlNavigationWithPrompt(final WebView view, final String targetUrl) {
         if (targetUrl == null) return true;
 
-        // 1. Immediately block known ad/tracker domains
         if (AdBlocker.isAdOrRedirect(targetUrl)) {
             return true;
         }
 
-        // 2. Block app store / intent links
         String lowerUrl = targetUrl.toLowerCase();
         if (lowerUrl.startsWith("intent:") || lowerUrl.startsWith("market:") || lowerUrl.startsWith("play.google.com")) {
             return true;
         }
 
-        // 3. Check if target URL belongs to main domain
         try {
             Uri targetUri = Uri.parse(targetUrl);
-            String currentUrl = view.getUrl();
             String targetHost = targetUri.getHost();
 
-            // If same host, navigate directly
             if (targetHost != null && targetHost.toLowerCase().contains(ALLOWED_DOMAIN)) {
-                return false; // Let WebView load it normally
+                return false;
             }
 
-            // External or redirect attempt: Ask user first via popup!
             showRedirectConfirmationDialog(view, targetUrl);
-            return true; // Cancel automatic redirect until user confirms
+            return true;
 
         } catch (Exception e) {
             e.printStackTrace();
