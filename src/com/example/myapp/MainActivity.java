@@ -13,7 +13,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends Activity {
 
@@ -21,7 +20,6 @@ public class MainActivity extends Activity {
     private static final String ALLOWED_DOMAIN = "vdomov.com";
     private WebView webView;
     private ProgressBar progressBar;
-    private final AtomicInteger blockedCount = new AtomicInteger(0);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,6 +28,13 @@ public class MainActivity extends Activity {
 
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
+
+        // Initialize AdBlocker engine and install/update latest blocklist
+        try {
+            AdBlocker.init(this);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         try {
             WebSettings webSettings = webView.getSettings();
@@ -71,7 +76,6 @@ public class MainActivity extends Activity {
                 if (request != null && request.getUrl() != null) {
                     String url = request.getUrl().toString();
                     if (AdBlocker.isAdOrRedirect(url)) {
-                        blockedCount.incrementAndGet();
                         return AdBlocker.createEmptyResource();
                     }
                 }
@@ -81,7 +85,6 @@ public class MainActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
                 if (AdBlocker.isAdOrRedirect(url)) {
-                    blockedCount.incrementAndGet();
                     return AdBlocker.createEmptyResource();
                 }
                 return super.shouldInterceptRequest(view, url);
@@ -141,7 +144,6 @@ public class MainActivity extends Activity {
         if (url == null) return true;
 
         if (AdBlocker.isAdOrRedirect(url)) {
-            blockedCount.incrementAndGet();
             return true;
         }
 
