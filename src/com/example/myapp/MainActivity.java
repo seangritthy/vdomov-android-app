@@ -31,29 +31,32 @@ public class MainActivity extends Activity {
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
 
-        WebSettings webSettings = webView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(true);
-        webSettings.setDatabaseEnabled(true);
-        webSettings.setAllowFileAccess(true);
-        webSettings.setUseWideViewPort(true);
-        webSettings.setLoadWithOverviewMode(true);
-        webSettings.setBuiltInZoomControls(true);
-        webSettings.setDisplayZoomControls(false);
-        webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        
-        // Strict anti-redirect and anti-popup flags
-        webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
-        webSettings.setSupportMultipleWindows(false);
-        webSettings.setMediaPlaybackRequiresUserGesture(true);
-        webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/2.0");
+        try {
+            WebSettings webSettings = webView.getSettings();
+            webSettings.setJavaScriptEnabled(true);
+            webSettings.setDomStorageEnabled(true);
+            webSettings.setDatabaseEnabled(true);
+            webSettings.setAllowFileAccess(true);
+            webSettings.setUseWideViewPort(true);
+            webSettings.setLoadWithOverviewMode(true);
+            webSettings.setBuiltInZoomControls(true);
+            webSettings.setDisplayZoomControls(false);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            }
+            
+            webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
+            webSettings.setSupportMultipleWindows(false);
+            webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/2.0");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (request != null && request.getUrl() != null) {
-                    String url = request.getUrl().toString();
-                    return handleUrlNavigation(view, url);
+                    return handleUrlNavigation(view, request.getUrl().toString());
                 }
                 return false;
             }
@@ -126,8 +129,12 @@ public class MainActivity extends Activity {
 
         webView.loadUrl(TARGET_URL);
 
-        // Auto-check for new app updates in background
-        AppUpdater.checkForUpdates(this, false);
+        // Auto-check for new app updates safely in background
+        try {
+            AppUpdater.checkForUpdates(this, false);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private boolean handleUrlNavigation(WebView view, String url) {
@@ -158,40 +165,46 @@ public class MainActivity extends Activity {
     }
 
     private void injectAntiRedirectShield(WebView view) {
-        String jsShield = "javascript:(function() { " +
-                "window.open = function() { console.log('Blocked popup window.open'); return null; }; " +
-                "window.alert = function() {}; " +
-                "window.confirm = function() { return true; }; " +
-                "var originalAssign = window.location.assign; " +
-                "window.onbeforeunload = null; " +
-                "document.addEventListener('click', function(e) { " +
-                "  var target = e.target; " +
-                "  while (target && target.tagName !== 'A') { target = target.parentElement; } " +
-                "  if (target && target.target === '_blank') { target.target = '_self'; } " +
-                "}, true); " +
-                "})()";
-        view.evaluateJavascript(jsShield, null);
+        try {
+            String jsShield = "javascript:(function() { " +
+                    "window.open = function() { console.log('Blocked popup window.open'); return null; }; " +
+                    "window.alert = function() {}; " +
+                    "window.confirm = function() { return true; }; " +
+                    "var originalAssign = window.location.assign; " +
+                    "window.onbeforeunload = null; " +
+                    "document.addEventListener('click', function(e) { " +
+                    "  var target = e.target; " +
+                    "  while (target && target.tagName !== 'A') { target = target.parentElement; } " +
+                    "  if (target && target.target === '_blank') { target.target = '_self'; } " +
+                    "}, true); " +
+                    "})()";
+            view.evaluateJavascript(jsShield, null);
+        } catch (Exception ignored) {
+        }
     }
 
     private void injectAdBlockCSS(WebView view) {
-        String cssHideRules = "iframe[src*='ad'], .adsbygoogle, .ad-banner, [id*='google_ads'], " +
-                "[class*='ad-container'], [class*='sponsored'], [class*='popup'], [id*='pop-'], " +
-                "div[style*='position: fixed'][style*='z-index: 99999'], " +
-                "div[style*='position:absolute'][style*='z-index: 9999'] { " +
-                "display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }";
-        
-        String js = "javascript:(function() { " +
-                "var style = document.createElement('style'); " +
-                "style.type = 'text/css'; " +
-                "style.appendChild(document.createTextNode('" + cssHideRules + "')); " +
-                "document.head.appendChild(style); " +
-                "})()";
-        view.evaluateJavascript(js, null);
+        try {
+            String cssHideRules = "iframe[src*='ad'], .adsbygoogle, .ad-banner, [id*='google_ads'], " +
+                    "[class*='ad-container'], [class*='sponsored'], [class*='popup'], [id*='pop-'], " +
+                    "div[style*='position: fixed'][style*='z-index: 99999'], " +
+                    "div[style*='position:absolute'][style*='z-index: 9999'] { " +
+                    "display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }";
+            
+            String js = "javascript:(function() { " +
+                    "var style = document.createElement('style'); " +
+                    "style.type = 'text/css'; " +
+                    "style.appendChild(document.createTextNode('" + cssHideRules + "')); " +
+                    "document.head.appendChild(style); " +
+                    "})()";
+            view.evaluateJavascript(js, null);
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if ((keyCode == KeyEvent.KEYCODE_BACK) && webView.canGoBack()) {
+        if ((keyCode == KeyEvent.KEYCODE_BACK) && webView != null && webView.canGoBack()) {
             webView.goBack();
             return true;
         }
