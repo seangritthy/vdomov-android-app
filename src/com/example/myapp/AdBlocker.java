@@ -211,29 +211,11 @@ public class AdBlocker {
     }
 
     public static String getAdBlockCSS() {
-        return ".adsbygoogle, .ad-banner, .ad-box, .ad-container, [id*='google_ads'], " +
-                "iframe[src*='doubleclick.net'], iframe[src*='exoclick.com'], iframe[src*='popads.net'], " +
-                "iframe[src*='popunder'], iframe[src*='propellerads.com'], iframe[src*='juicyads.com'], " +
-                "iframe[src*='bet365.com'], iframe[src*='1xbet.com'] { " +
-                "display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }";
+        return "";
     }
 
     public static String getAntiRedirectShieldScript() {
-        return "javascript:(function() { " +
-                "try { " +
-                "  window.open = function() { console.log('OriginGuard Shield: Blocked popup window.open'); return null; }; " +
-                "  window.alert = function() {}; " +
-                "  window.confirm = function() { return true; }; " +
-                "  window.onbeforeunload = null; " +
-                "  document.addEventListener('click', function(e) { " +
-                "    var target = e.target; " +
-                "    while (target && target.tagName !== 'A') { target = target.parentElement; } " +
-                "    if (target) { " +
-                "      if (target.target === '_blank') { target.target = '_self'; } " +
-                "    } " +
-                "  }, true); " +
-                "} catch(e) {} " +
-                "})()";
+        return "javascript:(function() {})()";
     }
 }
 
