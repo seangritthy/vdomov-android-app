@@ -1,6 +1,8 @@
 package com.example.myapp;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
@@ -29,7 +31,6 @@ public class MainActivity extends Activity {
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
 
-        // Initialize AdBlocker engine and install/update latest blocklist
         try {
             AdBlocker.init(this);
         } catch (Exception e) {
@@ -61,14 +62,14 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (request != null && request.getUrl() != null) {
-                    return handleUrlNavigation(view, request.getUrl().toString());
+                    return handleUrlNavigationWithPrompt(view, request.getUrl().toString());
                 }
                 return false;
             }
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return handleUrlNavigation(view, url);
+                return handleUrlNavigationWithPrompt(view, url);
             }
 
             @Override
@@ -132,7 +133,6 @@ public class MainActivity extends Activity {
 
         webView.loadUrl(TARGET_URL);
 
-        // Auto-check for new app updates safely in background
         try {
             AppUpdater.checkForUpdates(this, false);
         } catch (Exception e) {
@@ -140,30 +140,60 @@ public class MainActivity extends Activity {
         }
     }
 
-    private boolean handleUrlNavigation(WebView view, String url) {
-        if (url == null) return true;
+    private boolean handleUrlNavigationWithPrompt(final WebView view, final String targetUrl) {
+        if (targetUrl == null) return true;
 
-        if (AdBlocker.isAdOrRedirect(url)) {
+        // 1. Immediately block known ad/tracker domains
+        if (AdBlocker.isAdOrRedirect(targetUrl)) {
             return true;
         }
 
-        String lowerUrl = url.toLowerCase();
+        // 2. Block app store / intent links
+        String lowerUrl = targetUrl.toLowerCase();
         if (lowerUrl.startsWith("intent:") || lowerUrl.startsWith("market:") || lowerUrl.startsWith("play.google.com")) {
             return true;
         }
 
+        // 3. Check if target URL belongs to main domain
         try {
-            Uri uri = Uri.parse(url);
-            String host = uri.getHost();
-            if (host != null && host.toLowerCase().contains(ALLOWED_DOMAIN)) {
-                view.loadUrl(url);
-                return true;
+            Uri targetUri = Uri.parse(targetUrl);
+            String currentUrl = view.getUrl();
+            String targetHost = targetUri.getHost();
+
+            // If same host, navigate directly
+            if (targetHost != null && targetHost.toLowerCase().contains(ALLOWED_DOMAIN)) {
+                return false; // Let WebView load it normally
             }
-        } catch (Exception ignored) {
+
+            // External or redirect attempt: Ask user first via popup!
+            showRedirectConfirmationDialog(view, targetUrl);
+            return true; // Cancel automatic redirect until user confirms
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
-        view.loadUrl(url);
-        return true;
+        return false;
+    }
+
+    private void showRedirectConfirmationDialog(final WebView view, final String targetUrl) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("External Redirect Alert")
+                        .setMessage("The webpage is attempting to redirect or open an external link:\n\n" + targetUrl + "\n\nDo you want to proceed?")
+                        .setPositiveButton("Open Link", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                view.loadUrl(targetUrl);
+                            }
+                        })
+                        .setNegativeButton("Block & Cancel", null)
+                        .setCancelable(true)
+                        .show();
+            }
+        });
     }
 
     private void injectAntiRedirectShield(WebView view) {
