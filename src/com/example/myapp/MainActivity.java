@@ -67,6 +67,11 @@ public class MainActivity extends Activity {
             webSettings.setBuiltInZoomControls(true);
             webSettings.setDisplayZoomControls(false);
 
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                webSettings.setMediaPlaybackRequiresUserGesture(false);
+            }
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
             // Enable Cookie & Storage persistence
             CookieManager cookieManager = CookieManager.getInstance();
             cookieManager.setAcceptCookie(true);

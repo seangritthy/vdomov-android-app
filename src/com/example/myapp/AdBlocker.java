@@ -157,6 +157,14 @@ public class AdBlocker {
         }
 
         String lowerUrl = urlString.toLowerCase();
+        
+        // Whitelist main domain, video streams, HLS, and media content
+        if (lowerUrl.contains("vdomov.com") || lowerUrl.contains(".m3u8") || lowerUrl.contains(".mp4") ||
+            lowerUrl.contains(".webm") || lowerUrl.contains(".ts") || lowerUrl.contains("blob:") ||
+            lowerUrl.contains("hls") || lowerUrl.contains("stream") || lowerUrl.contains("cdn")) {
+            return false;
+        }
+
         if (lowerUrl.startsWith("intent:") || lowerUrl.startsWith("market:") || lowerUrl.startsWith("about:blank#blocked")) {
             BLOCKED_COUNT.incrementAndGet();
             return true;
@@ -203,19 +211,11 @@ public class AdBlocker {
     }
 
     public static String getAdBlockCSS() {
-        return "iframe[src*='ad'], iframe[src*='pop'], iframe[src*='banner'], iframe[src*='sponsor'], " +
-                ".adsbygoogle, .ad-banner, .ad-box, .ad-container, .ad-wrapper, .ad-layer, .ad-overlay, " +
-                "[id*='google_ads'], [class*='sponsored'], [class*='popup'], [id*='pop-'], [class*='pop-'], " +
-                "[class*='popunder'], [id*='popunder'], [class*='overlay-ad'], [id*='overlay-ad'], " +
-                "[class*='video-ad'], [id*='video-ad'], [class*='player-ad'], [id*='player-ad'], " +
-                "[class*='interstitial'], [id*='interstitial'], [class*='float-ad'], [id*='float-ad'], " +
-                "[class*='sticky-ad'], [id*='sticky-ad'], [class*='ad_box'], [id*='ad_box'], " +
-                "div[style*='position: fixed'][style*='z-index'], " +
-                "div[style*='position: absolute'][style*='z-index: 99'], " +
-                "div[style*='position: absolute'][style*='z-index: 999'], " +
-                "div[style*='position: absolute'][style*='z-index: 9999'], " +
-                "div[style*='z-index: 2147483647'] { " +
-                "display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; width: 0px !important; height: 0px !important; }";
+        return ".adsbygoogle, .ad-banner, .ad-box, .ad-container, [id*='google_ads'], " +
+                "iframe[src*='doubleclick.net'], iframe[src*='exoclick.com'], iframe[src*='popads.net'], " +
+                "iframe[src*='popunder'], iframe[src*='propellerads.com'], iframe[src*='juicyads.com'], " +
+                "iframe[src*='bet365.com'], iframe[src*='1xbet.com'] { " +
+                "display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }";
     }
 
     public static String getAntiRedirectShieldScript() {
@@ -225,44 +225,11 @@ public class AdBlocker {
                 "  window.alert = function() {}; " +
                 "  window.confirm = function() { return true; }; " +
                 "  window.onbeforeunload = null; " +
-                "  function purgeOverlayAds() { " +
-                "    var allElements = document.querySelectorAll('div, a, iframe, span, section'); " +
-                "    for (var i = 0; i < allElements.length; i++) { " +
-                "      var el = allElements[i]; " +
-                "      var style = window.getComputedStyle(el); " +
-                "      var pos = style.getPropertyValue('position'); " +
-                "      var zIndex = parseInt(style.getPropertyValue('z-index')) || 0; " +
-                "      var className = (el.className || '').toString().toLowerCase(); " +
-                "      var idName = (el.id || '').toString().toLowerCase(); " +
-                "      var isAdKeyword = (className.indexOf('ad') !== -1 || className.indexOf('pop') !== -1 || className.indexOf('overlay') !== -1 || " +
-                "                         idName.indexOf('ad') !== -1 || idName.indexOf('pop') !== -1 || idName.indexOf('overlay') !== -1); " +
-                "      var isFullOverlay = (pos === 'fixed' || pos === 'absolute') && zIndex >= 100 && " +
-                "                          (el.offsetWidth >= window.innerWidth * 0.7 && el.offsetHeight >= window.innerHeight * 0.7); " +
-                "      if (isAdKeyword || isFullOverlay) { " +
-                "        if (el.tagName === 'IFRAME' || el.querySelector('iframe') || isFullOverlay) { " +
-                "          el.style.setProperty('display', 'none', 'important'); " +
-                "          el.style.setProperty('pointer-events', 'none', 'important'); " +
-                "          el.style.setProperty('visibility', 'hidden', 'important'); " +
-                "          el.style.setProperty('opacity', '0', 'important'); " +
-                "        } " +
-                "      } " +
-                "    } " +
-                "  } " +
-                "  purgeOverlayAds(); " +
-                "  setInterval(purgeOverlayAds, 1000); " +
-                "  var observer = new MutationObserver(function(mutations) { purgeOverlayAds(); }); " +
-                "  if (document.body) { observer.observe(document.body, { childList: true, subtree: true }); } " +
-                "  else { document.addEventListener('DOMContentLoaded', function() { observer.observe(document.body, { childList: true, subtree: true }); }); } " +
                 "  document.addEventListener('click', function(e) { " +
                 "    var target = e.target; " +
                 "    while (target && target.tagName !== 'A') { target = target.parentElement; } " +
                 "    if (target) { " +
                 "      if (target.target === '_blank') { target.target = '_self'; } " +
-                "      var href = target.getAttribute('href'); " +
-                "      if (href && (href.indexOf('javascript:void') === 0 || href === '#')) { " +
-                "        var onclick = target.getAttribute('onclick'); " +
-                "        if (onclick && (onclick.indexOf('open') !== -1 || onclick.indexOf('pop') !== -1)) { e.preventDefault(); e.stopPropagation(); } " +
-                "      } " +
                 "    } " +
                 "  }, true); " +
                 "} catch(e) {} " +
