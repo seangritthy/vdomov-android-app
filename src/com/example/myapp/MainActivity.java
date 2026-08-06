@@ -2,20 +2,27 @@ package com.example.myapp;
 
 import android.app.Activity;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends Activity {
 
     private static final String TARGET_URL = "https://www.vdomov.com";
     private WebView webView;
     private ProgressBar progressBar;
+    private final AtomicInteger blockedAdsCount = new AtomicInteger(0);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,13 +42,28 @@ public class MainActivity extends Activity {
         webSettings.setBuiltInZoomControls(true);
         webSettings.setDisplayZoomControls(false);
         webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        webSettings.setUserAgentString(webSettings.getUserAgentString() + " VDomovApp/1.0");
+        webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardAdBlock/1.0");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                view.loadUrl(url);
-                return true;
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (request != null && request.getUrl() != null) {
+                    String host = request.getUrl().getHost();
+                    if (AdBlocker.isAdHost(host)) {
+                        blockedAdsCount.incrementAndGet();
+                        return AdBlocker.createEmptyResource();
+                    }
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+                if (AdBlocker.isAd(url)) {
+                    blockedAdsCount.incrementAndGet();
+                    return AdBlocker.createEmptyResource();
+                }
+                return super.shouldInterceptRequest(view, url);
             }
 
             @Override
@@ -58,6 +80,7 @@ public class MainActivity extends Activity {
                 if (progressBar != null) {
                     progressBar.setVisibility(View.GONE);
                 }
+                injectAdBlockCSS(view);
             }
         });
 
@@ -77,6 +100,17 @@ public class MainActivity extends Activity {
         });
 
         webView.loadUrl(TARGET_URL);
+    }
+
+    private void injectAdBlockCSS(WebView view) {
+        String cssHideRules = "iframe[src*='ad'], .adsbygoogle, .ad-banner, [id*='google_ads'], [class*='ad-container'], [class*='sponsored'] { display: none !important; visibility: hidden !important; }";
+        String js = "javascript:(function() { " +
+                "var style = document.createElement('style'); " +
+                "style.type = 'text/css'; " +
+                "style.appendChild(document.createTextNode('" + cssHideRules + "')); " +
+                "document.head.appendChild(style); " +
+                "})()";
+        view.evaluateJavascript(js, null);
     }
 
     @Override

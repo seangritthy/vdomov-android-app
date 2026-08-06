@@ -28,7 +28,7 @@ echo "[3/6] Compiling Java source files..."
 javac -d build/obj \
     -classpath libs/android.jar \
     -sourcepath "src:build/gen" \
-    src/com/example/myapp/MainActivity.java build/gen/com/example/myapp/R.java
+    $(find src build/gen -name "*.java")
 
 # 5. Dexing bytecode to DEX
 echo "[4/6] Converting bytecode to DEX using d8..."
