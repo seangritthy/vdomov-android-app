@@ -65,6 +65,7 @@ apksigner sign \
     --out app-release.apk \
     build/bin/app-unsigned.apk
 
+cp app-release.apk vdomov-mobile.apk
 echo "=== BUILD SUCCESSFUL ==="
-echo "APK location: $APP_DIR/app-release.apk"
-ls -lh app-release.apk
+echo "APK location: $APP_DIR/app-release.apk & $APP_DIR/vdomov-mobile.apk"
+ls -lh app-release.apk vdomov-mobile.apk
