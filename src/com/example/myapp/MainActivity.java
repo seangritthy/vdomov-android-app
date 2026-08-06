@@ -2,19 +2,26 @@ package com.example.myapp;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DownloadManager;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.view.KeyEvent;
 import android.view.View;
+import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
@@ -22,6 +29,11 @@ public class MainActivity extends Activity {
     private static final String ALLOWED_DOMAIN = "vdomov.com";
     private WebView webView;
     private ProgressBar progressBar;
+    private ProgressBar horizontalProgressBar;
+    private FrameLayout fullscreenContainer;
+
+    private View customView;
+    private WebChromeClient.CustomViewCallback customViewCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,6 +42,8 @@ public class MainActivity extends Activity {
 
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
+        horizontalProgressBar = findViewById(R.id.horizontalProgressBar);
+        fullscreenContainer = findViewById(R.id.fullscreenContainer);
 
         // TV Remote D-Pad Focus configuration
         webView.setFocusable(true);
@@ -52,16 +66,42 @@ public class MainActivity extends Activity {
             webSettings.setLoadWithOverviewMode(true);
             webSettings.setBuiltInZoomControls(true);
             webSettings.setDisplayZoomControls(false);
+
+            // Enable Cookie & Storage persistence
+            CookieManager cookieManager = CookieManager.getInstance();
+            cookieManager.setAcceptCookie(true);
+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
                 webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                cookieManager.setAcceptThirdPartyCookies(webView, true);
             }
             
             webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
             webSettings.setSupportMultipleWindows(false);
-            webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/2.0 AndroidTV");
+            webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/3.0 AndroidTV VDOmov");
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        // File Download Handler
+        webView.setDownloadListener(new DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+                try {
+                    DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                    request.allowScanningByMediaScanner();
+                    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, Uri.parse(url).getLastPathSegment());
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dm != null) {
+                        dm.enqueue(request);
+                        Toast.makeText(getApplicationContext(), "Downloading file...", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(getApplicationContext(), "Download failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -99,18 +139,16 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                if (progressBar != null) {
-                    progressBar.setVisibility(View.VISIBLE);
-                }
+                if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+                if (horizontalProgressBar != null) horizontalProgressBar.setVisibility(View.VISIBLE);
                 injectAntiRedirectShield(view);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (progressBar != null) {
-                    progressBar.setVisibility(View.GONE);
-                }
+                if (progressBar != null) progressBar.setVisibility(View.GONE);
+                if (horizontalProgressBar != null) horizontalProgressBar.setVisibility(View.GONE);
                 injectAntiRedirectShield(view);
                 injectAdBlockCSS(view);
             }
@@ -119,20 +157,44 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
+                if (horizontalProgressBar != null) {
+                    horizontalProgressBar.setProgress(newProgress);
+                }
                 if (newProgress == 100) {
-                    if (progressBar != null) {
-                        progressBar.setVisibility(View.GONE);
-                    }
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    if (horizontalProgressBar != null) horizontalProgressBar.setVisibility(View.GONE);
                 } else {
-                    if (progressBar != null) {
-                        progressBar.setVisibility(View.VISIBLE);
-                    }
+                    if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+                    if (horizontalProgressBar != null) horizontalProgressBar.setVisibility(View.VISIBLE);
                 }
             }
 
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
                 return false;
+            }
+
+            // HTML5 Fullscreen Video Support
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (customView != null) {
+                    onHideCustomView();
+                    return;
+                }
+                customView = view;
+                customViewCallback = callback;
+                if (fullscreenContainer != null) {
+                    fullscreenContainer.addView(view);
+                    fullscreenContainer.setVisibility(View.VISIBLE);
+                }
+                if (webView != null) {
+                    webView.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void onHideCustomView() {
+                onHideCustomViewInternal();
             }
         });
 
@@ -143,6 +205,22 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private void onHideCustomViewInternal() {
+        if (customView == null) return;
+        if (fullscreenContainer != null) {
+            fullscreenContainer.removeView(customView);
+            fullscreenContainer.setVisibility(View.GONE);
+        }
+        if (webView != null) {
+            webView.setVisibility(View.VISIBLE);
+        }
+        if (customViewCallback != null) {
+            customViewCallback.onCustomViewHidden();
+        }
+        customView = null;
+        customViewCallback = null;
     }
 
     private boolean handleUrlNavigationWithPrompt(final WebView view, final String targetUrl) {
@@ -180,15 +258,15 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("External Redirect Alert")
-                        .setMessage("The webpage is attempting to redirect or open an external link:\n\n" + targetUrl + "\n\nDo you want to proceed?")
-                        .setPositiveButton("Open Link", new DialogInterface.OnClickListener() {
+                        .setTitle("External Link Shield")
+                        .setMessage("VDOmov OriginGuard Shield detected an external link:\n\n" + targetUrl + "\n\nDo you want to proceed?")
+                        .setPositiveButton("Open External Link", new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialog, int which) {
                                 view.loadUrl(targetUrl);
                             }
                         })
-                        .setNegativeButton("Block & Cancel", null)
+                        .setNegativeButton("Block & Stay", null)
                         .setCancelable(true)
                         .show();
             }
@@ -197,31 +275,14 @@ public class MainActivity extends Activity {
 
     private void injectAntiRedirectShield(WebView view) {
         try {
-            String jsShield = "javascript:(function() { " +
-                    "window.open = function() { console.log('Blocked popup window.open'); return null; }; " +
-                    "window.alert = function() {}; " +
-                    "window.confirm = function() { return true; }; " +
-                    "var originalAssign = window.location.assign; " +
-                    "window.onbeforeunload = null; " +
-                    "document.addEventListener('click', function(e) { " +
-                    "  var target = e.target; " +
-                    "  while (target && target.tagName !== 'A') { target = target.parentElement; } " +
-                    "  if (target && target.target === '_blank') { target.target = '_self'; } " +
-                    "}, true); " +
-                    "})()";
-            view.evaluateJavascript(jsShield, null);
+            view.evaluateJavascript(AdBlocker.getAntiRedirectShieldScript(), null);
         } catch (Exception ignored) {
         }
     }
 
     private void injectAdBlockCSS(WebView view) {
         try {
-            String cssHideRules = "iframe[src*='ad'], .adsbygoogle, .ad-banner, [id*='google_ads'], " +
-                    "[class*='ad-container'], [class*='sponsored'], [class*='popup'], [id*='pop-'], " +
-                    "div[style*='position: fixed'][style*='z-index: 99999'], " +
-                    "div[style*='position:absolute'][style*='z-index: 9999'] { " +
-                    "display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }";
-            
+            String cssHideRules = AdBlocker.getAdBlockCSS();
             String js = "javascript:(function() { " +
                     "var style = document.createElement('style'); " +
                     "style.type = 'text/css'; " +
@@ -235,16 +296,24 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if ((keyCode == KeyEvent.KEYCODE_BACK) && webView != null && webView.canGoBack()) {
-            webView.goBack();
-            return true;
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (customView != null) {
+                onHideCustomViewInternal();
+                return true;
+            }
+            if (webView != null && webView.canGoBack()) {
+                webView.goBack();
+                return true;
+            }
         }
         return super.onKeyDown(keyCode, event);
     }
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
+        if (customView != null) {
+            onHideCustomViewInternal();
+        } else if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();

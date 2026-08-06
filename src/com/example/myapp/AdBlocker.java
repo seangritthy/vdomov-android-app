@@ -14,16 +14,20 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 public class AdBlocker {
 
     private static final Set<String> AD_HOSTS = new HashSet<>();
     private static boolean isInitialized = false;
+    private static final AtomicInteger BLOCKED_COUNT = new AtomicInteger(0);
 
     private static final Pattern AD_URL_PATTERNS = Pattern.compile(
         ".*(?:/ad/|/ads/|/pop/|/banner/|/click/|/track/|/pixel/|/affiliate/|/promo/|/sponsor/|" +
-        "adsbygoogle|pagead|popunder|popup|clickunder|adsystem|adserver|adservice|analytics|telemetry).*",
+        "adsbygoogle|pagead|popunder|popup|clickunder|adsystem|adserver|adservice|analytics|telemetry|" +
+        "bet365|1xbet|mostbet|melbet|exoclick|juicyads|propellerads|popcash|popads|clickadu|hilltopads|" +
+        "adsterra|zeropark|bidvertiser|mgid|revcontent|infolinks|adcash|revenuehits|adblade).*",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -45,7 +49,9 @@ public class AdBlocker {
             "juicyads.com", "popunder.net", "clickadu.com", "adsterra.com", "hilltopads.com",
             "bidvertiser.com", "revcontent.com", "mgid.com", "infolinks.com", "zeropark.com",
             "adcash.com", "popmyads.com", "revenuehits.com", "adblade.com", "media.net",
-            "mc.yandex.ru", "an.yandex.ru", "adfox.ru", "ad.mail.ru", "target.my.com"
+            "mc.yandex.ru", "an.yandex.ru", "adfox.ru", "ad.mail.ru", "target.my.com",
+            "bet365.com", "1xbet.com", "mostbet.com", "melbet.com", "trafficjunky.com",
+            "syndicated.exoclick.com", "main.exoclick.com", "ad.propellerads.com"
         };
         for (String d : domains) {
             AD_HOSTS.add(d.toLowerCase());
@@ -141,6 +147,10 @@ public class AdBlocker {
         return AD_HOSTS.size();
     }
 
+    public static int getBlockedCount() {
+        return BLOCKED_COUNT.get();
+    }
+
     public static boolean isAdOrRedirect(String urlString) {
         if (urlString == null || urlString.isEmpty()) {
             return false;
@@ -148,18 +158,25 @@ public class AdBlocker {
 
         String lowerUrl = urlString.toLowerCase();
         if (lowerUrl.startsWith("intent:") || lowerUrl.startsWith("market:") || lowerUrl.startsWith("about:blank#blocked")) {
+            BLOCKED_COUNT.incrementAndGet();
             return true;
         }
 
         try {
             String host = getHost(urlString);
             if (isAdHost(host)) {
+                BLOCKED_COUNT.incrementAndGet();
                 return true;
             }
         } catch (Exception ignored) {
         }
 
-        return AD_URL_PATTERNS.matcher(urlString).matches();
+        if (AD_URL_PATTERNS.matcher(urlString).matches()) {
+            BLOCKED_COUNT.incrementAndGet();
+            return true;
+        }
+
+        return false;
     }
 
     public static boolean isAdHost(String host) {
@@ -184,4 +201,38 @@ public class AdBlocker {
     public static WebResourceResponse createEmptyResource() {
         return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
     }
+
+    public static String getAdBlockCSS() {
+        return "iframe[src*='ad'], iframe[src*='pop'], .adsbygoogle, .ad-banner, [id*='google_ads'], " +
+                "[class*='ad-container'], [class*='sponsored'], [class*='popup'], [id*='pop-'], " +
+                "[class*='popunder'], [id*='popunder'], [class*='overlay-ad'], [id*='overlay-ad'], " +
+                "div[style*='position: fixed'][style*='z-index: 99999'], " +
+                "div[style*='position:absolute'][style*='z-index: 9999'], " +
+                "div[style*='z-index: 2147483647'] { " +
+                "display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }";
+    }
+
+    public static String getAntiRedirectShieldScript() {
+        return "javascript:(function() { " +
+                "try { " +
+                "  window.open = function() { console.log('OriginGuard Shield: Blocked popup window.open'); return null; }; " +
+                "  window.alert = function() {}; " +
+                "  window.confirm = function() { return true; }; " +
+                "  window.onbeforeunload = null; " +
+                "  document.addEventListener('click', function(e) { " +
+                "    var target = e.target; " +
+                "    while (target && target.tagName !== 'A') { target = target.parentElement; } " +
+                "    if (target) { " +
+                "      if (target.target === '_blank') { target.target = '_self'; } " +
+                "      var href = target.getAttribute('href'); " +
+                "      if (href && (href.indexOf('javascript:void') === 0 || href === '#')) { " +
+                "        var onclick = target.getAttribute('onclick'); " +
+                "        if (onclick && onclick.indexOf('open') !== -1) { e.preventDefault(); e.stopPropagation(); } " +
+                "      } " +
+                "    } " +
+                "  }, true); " +
+                "} catch(e) {} " +
+                "})()";
+    }
 }
+
