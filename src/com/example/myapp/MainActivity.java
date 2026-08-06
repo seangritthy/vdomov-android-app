@@ -13,16 +13,15 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
-import android.widget.TextView;
-import android.widget.Toast;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends Activity {
 
     private static final String TARGET_URL = "https://www.vdomov.com";
+    private static final String ALLOWED_DOMAIN = "vdomov.com";
     private WebView webView;
     private ProgressBar progressBar;
-    private final AtomicInteger blockedAdsCount = new AtomicInteger(0);
+    private final AtomicInteger blockedCount = new AtomicInteger(0);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,15 +41,34 @@ public class MainActivity extends Activity {
         webSettings.setBuiltInZoomControls(true);
         webSettings.setDisplayZoomControls(false);
         webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardAdBlock/1.0");
+        
+        // Strict anti-redirect and anti-popup flags
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
+        webSettings.setSupportMultipleWindows(false);
+        webSettings.setMediaPlaybackRequiresUserGesture(true);
+        webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/2.0");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (request != null && request.getUrl() != null) {
+                    String url = request.getUrl().toString();
+                    return handleUrlNavigation(view, url);
+                }
+                return false;
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return handleUrlNavigation(view, url);
+            }
+
+            @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 if (request != null && request.getUrl() != null) {
-                    String host = request.getUrl().getHost();
-                    if (AdBlocker.isAdHost(host)) {
-                        blockedAdsCount.incrementAndGet();
+                    String url = request.getUrl().toString();
+                    if (AdBlocker.isAdOrRedirect(url)) {
+                        blockedCount.incrementAndGet();
                         return AdBlocker.createEmptyResource();
                     }
                 }
@@ -59,8 +77,8 @@ public class MainActivity extends Activity {
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-                if (AdBlocker.isAd(url)) {
-                    blockedAdsCount.incrementAndGet();
+                if (AdBlocker.isAdOrRedirect(url)) {
+                    blockedCount.incrementAndGet();
                     return AdBlocker.createEmptyResource();
                 }
                 return super.shouldInterceptRequest(view, url);
@@ -72,6 +90,7 @@ public class MainActivity extends Activity {
                 if (progressBar != null) {
                     progressBar.setVisibility(View.VISIBLE);
                 }
+                injectAntiRedirectShield(view);
             }
 
             @Override
@@ -80,6 +99,7 @@ public class MainActivity extends Activity {
                 if (progressBar != null) {
                     progressBar.setVisibility(View.GONE);
                 }
+                injectAntiRedirectShield(view);
                 injectAdBlockCSS(view);
             }
         });
@@ -97,13 +117,72 @@ public class MainActivity extends Activity {
                     }
                 }
             }
+
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+                // Strictly block popups & new windows
+                return false;
+            }
         });
 
         webView.loadUrl(TARGET_URL);
     }
 
+    private boolean handleUrlNavigation(WebView view, String url) {
+        if (url == null) return true;
+
+        // Block known ad/redirect URLs immediately
+        if (AdBlocker.isAdOrRedirect(url)) {
+            blockedCount.incrementAndGet();
+            return true; // Cancel navigation
+        }
+
+        // Block intent/market/app store redirects from ad scripts
+        String lowerUrl = url.toLowerCase();
+        if (lowerUrl.startsWith("intent:") || lowerUrl.startsWith("market:") || lowerUrl.startsWith("play.google.com")) {
+            return true; // Block app store redirect popups
+        }
+
+        // Allow navigation within target domain
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host != null && host.toLowerCase().contains(ALLOWED_DOMAIN)) {
+                view.loadUrl(url);
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Default: load url safely inside webview without popping external browser
+        view.loadUrl(url);
+        return true;
+    }
+
+    private void injectAntiRedirectShield(WebView view) {
+        // JavaScript shield to kill window.open, popup redirects, clickjack overlays & redirect loops
+        String jsShield = "javascript:(function() { " +
+                "window.open = function() { console.log('Blocked popup window.open'); return null; }; " +
+                "window.alert = function() {}; " +
+                "window.confirm = function() { return true; }; " +
+                "var originalAssign = window.location.assign; " +
+                "window.onbeforeunload = null; " +
+                "document.addEventListener('click', function(e) { " +
+                "  var target = e.target; " +
+                "  while (target && target.tagName !== 'A') { target = target.parentElement; } " +
+                "  if (target && target.target === '_blank') { target.target = '_self'; } " +
+                "}, true); " +
+                "})()";
+        view.evaluateJavascript(jsShield, null);
+    }
+
     private void injectAdBlockCSS(WebView view) {
-        String cssHideRules = "iframe[src*='ad'], .adsbygoogle, .ad-banner, [id*='google_ads'], [class*='ad-container'], [class*='sponsored'] { display: none !important; visibility: hidden !important; }";
+        String cssHideRules = "iframe[src*='ad'], .adsbygoogle, .ad-banner, [id*='google_ads'], " +
+                "[class*='ad-container'], [class*='sponsored'], [class*='popup'], [id*='pop-'], " +
+                "div[style*='position: fixed'][style*='z-index: 99999'], " +
+                "div[style*='position:absolute'][style*='z-index: 9999'] { " +
+                "display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }";
+        
         String js = "javascript:(function() { " +
                 "var style = document.createElement('style'); " +
                 "style.type = 'text/css'; " +
