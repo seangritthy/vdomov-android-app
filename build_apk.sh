@@ -68,6 +68,13 @@ apksigner sign \
 cp app-release.apk vdomov-mobile.apk
 cp app-release.apk vdomov-tv.apk
 cp app-release.apk vdomov-tablet.apk
+
+if command -v makensis >/dev/null 2>&1; then
+    echo "[7/7] Compiling Windows PC 1-Click Installer (vdomov-pc.exe)..."
+    makensis pc_build/vdomov_pc_installer.nsi
+    cp vdomov-pc.exe vdomov-setup.exe
+fi
+
 echo "=== BUILD SUCCESSFUL ==="
-echo "APK location: $APP_DIR/app-release.apk & $APP_DIR/vdomov-mobile.apk & $APP_DIR/vdomov-tv.apk & $APP_DIR/vdomov-tablet.apk"
-ls -lh app-release.apk vdomov-mobile.apk vdomov-tv.apk vdomov-tablet.apk
+echo "Artifacts generated: app-release.apk, vdomov-mobile.apk, vdomov-tv.apk, vdomov-tablet.apk, vdomov-pc.exe, vdomov-setup.exe"
+ls -lh app-release.apk vdomov-mobile.apk vdomov-tv.apk vdomov-tablet.apk vdomov-pc.exe vdomov-setup.exe
