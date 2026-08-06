@@ -8,10 +8,13 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.StrictMode;
+import android.provider.Settings;
+import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedReader;
@@ -22,6 +25,7 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.List;
 
 public class AppUpdater {
 
@@ -213,6 +217,8 @@ public class AppUpdater {
     }
 
     private static void installApk(Activity activity, File apkFile) {
+        if (activity == null || apkFile == null || !apkFile.exists()) return;
+
         try {
             if (Build.VERSION.SDK_INT >= 24) {
                 Method m = StrictMode.class.getMethod("disableDeathOnFileUriExposure");
@@ -221,9 +227,67 @@ public class AppUpdater {
         } catch (Exception ignored) {
         }
 
+        if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                if (!activity.getPackageManager().canRequestPackageInstalls()) {
+                    Toast.makeText(activity, "Please allow VDOmov to install updates", Toast.LENGTH_LONG).show();
+                    Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+                    settingsIntent.setData(Uri.parse("package:" + activity.getPackageName()));
+                    activity.startActivity(settingsIntent);
+                    return;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        Uri apkUri = Uri.fromFile(apkFile);
         Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive");
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        activity.startActivity(intent);
+        intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        PackageManager pm = activity.getPackageManager();
+        List<ResolveInfo> resolveInfoList = pm.queryIntentActivities(intent, 0);
+        String targetPackage = null;
+
+        if (resolveInfoList != null && !resolveInfoList.isEmpty()) {
+            for (ResolveInfo info : resolveInfoList) {
+                String pkgName = info.activityInfo.packageName;
+                if (pkgName.equals("com.google.android.packageinstaller") ||
+                    pkgName.equals("com.android.packageinstaller") ||
+                    pkgName.equals("com.samsung.android.packageinstaller") ||
+                    pkgName.equals("com.miui.packageinstaller") ||
+                    pkgName.contains("packageinstaller")) {
+                    targetPackage = pkgName;
+                    break;
+                }
+            }
+
+            if (targetPackage == null) {
+                for (ResolveInfo info : resolveInfoList) {
+                    String pkgName = info.activityInfo.packageName;
+                    if (pkgName.contains("installer")) {
+                        targetPackage = pkgName;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (targetPackage != null) {
+            intent.setPackage(targetPackage);
+        }
+
+        try {
+            activity.startActivity(intent);
+        } catch (Exception e) {
+            e.printStackTrace();
+            try {
+                intent.setPackage(null);
+                activity.startActivity(intent);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
     }
 }
