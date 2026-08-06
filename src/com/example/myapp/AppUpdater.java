@@ -25,7 +25,7 @@ import java.net.URL;
 
 public class AppUpdater {
 
-    private static final String GITHUB_RELEASES_URL = "https://api.github.com/repos/seangritthy/vdomov-android-app/releases/latest";
+    private static final String GITHUB_RELEASES_URL = "https://api.github.com/repos/seangritthy/vdomov-apks/releases/latest";
 
     public static void checkForUpdates(final Activity activity, final boolean showNoUpdateToast) {
         new CheckUpdateTask(activity, showNoUpdateToast).execute();
