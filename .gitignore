@@ -1,0 +1,8 @@
+# Build directories
+build/gen/
+build/obj/
+build/bin/
+*.keystore
+
+# Keep APK for convenience or release
+!app-release.apk
