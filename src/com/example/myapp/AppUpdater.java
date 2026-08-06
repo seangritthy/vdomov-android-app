@@ -30,9 +30,20 @@ import java.util.List;
 public class AppUpdater {
 
     private static final String GITHUB_RELEASES_URL = "https://api.github.com/repos/seangritthy/vdomov-apks/releases/latest";
+    private static File pendingApkFile = null;
 
     public static void checkForUpdates(final Activity activity, final boolean showNoUpdateToast) {
         new CheckUpdateTask(activity, showNoUpdateToast).execute();
+    }
+
+    public static void checkResumeInstall(Activity activity) {
+        if (pendingApkFile != null && pendingApkFile.exists()) {
+            if (Build.VERSION.SDK_INT < 26 || activity.getPackageManager().canRequestPackageInstalls()) {
+                File apkToInstall = pendingApkFile;
+                pendingApkFile = null;
+                installApk(activity, apkToInstall);
+            }
+        }
     }
 
     private static class CheckUpdateTask extends AsyncTask<Void, Void, JSONObject> {
@@ -76,6 +87,9 @@ public class AppUpdater {
             if (activity == null || activity.isFinishing()) return;
 
             if (result == null) {
+                if (showNoUpdateToast) {
+                    Toast.makeText(activity, "Failed to check for updates.", Toast.LENGTH_SHORT).show();
+                }
                 return;
             }
 
@@ -99,6 +113,8 @@ public class AppUpdater {
 
                 if (isNewerVersion(currentVersion, latestTag) && downloadUrl != null) {
                     showUpdateDialog(activity, latestTag, releaseNotes, downloadUrl);
+                } else if (showNoUpdateToast) {
+                    Toast.makeText(activity, "VDOmov is up to date (v" + currentVersion + ")", Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -141,7 +157,7 @@ public class AppUpdater {
     private static void showUpdateDialog(final Activity activity, final String newVersion, String releaseNotes, final String downloadUrl) {
         new AlertDialog.Builder(activity)
                 .setTitle("Update Available (v" + newVersion + ")")
-                .setMessage("A new version of vdomov is available!\n\nWhat's New:\n" + releaseNotes)
+                .setMessage("A new version of VDOmov is available!\n\nWhat's New:\n" + releaseNotes + "\n\nClick Install to update now.")
                 .setPositiveButton("Install Update", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
@@ -156,7 +172,7 @@ public class AppUpdater {
     private static void downloadAndInstallApk(final Activity activity, final String downloadUrl) {
         final ProgressDialog progressDialog = new ProgressDialog(activity);
         progressDialog.setTitle("Downloading Update");
-        progressDialog.setMessage("Please wait while downloading the latest APK...");
+        progressDialog.setMessage("Downloading the latest VDOmov update APK...");
         progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
         progressDialog.setCancelable(false);
         progressDialog.setMax(100);
@@ -172,7 +188,7 @@ public class AppUpdater {
                     conn.connect();
 
                     int fileLength = conn.getContentLength();
-                    File apkFile = new File(activity.getExternalFilesDir(null), "update.apk");
+                    File apkFile = new File(activity.getExternalFilesDir(null), "vdomov-update.apk");
                     if (apkFile.exists()) {
                         apkFile.delete();
                     }
@@ -194,6 +210,8 @@ public class AppUpdater {
                     output.flush();
                     output.close();
                     input.close();
+
+                    apkFile.setReadable(true, false);
                     return apkFile;
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -211,26 +229,22 @@ public class AppUpdater {
                 progressDialog.dismiss();
                 if (apkFile != null && apkFile.exists()) {
                     installApk(activity, apkFile);
+                } else {
+                    Toast.makeText(activity, "Failed to download update APK.", Toast.LENGTH_LONG).show();
                 }
             }
         }.execute();
     }
 
-    private static void installApk(Activity activity, File apkFile) {
+    public static void installApk(Activity activity, File apkFile) {
         if (activity == null || apkFile == null || !apkFile.exists()) return;
 
-        try {
-            if (Build.VERSION.SDK_INT >= 24) {
-                Method m = StrictMode.class.getMethod("disableDeathOnFileUriExposure");
-                m.invoke(null);
-            }
-        } catch (Exception ignored) {
-        }
-
+        // API 26+ (Android 8.0+) Check permission to install unknown packages
         if (Build.VERSION.SDK_INT >= 26) {
             try {
                 if (!activity.getPackageManager().canRequestPackageInstalls()) {
-                    Toast.makeText(activity, "Please allow VDOmov to install updates", Toast.LENGTH_LONG).show();
+                    pendingApkFile = apkFile;
+                    Toast.makeText(activity, "Please enable 'Allow from this source' to install the VDOmov update.", Toast.LENGTH_LONG).show();
                     Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
                     settingsIntent.setData(Uri.parse("package:" + activity.getPackageName()));
                     activity.startActivity(settingsIntent);
@@ -241,11 +255,31 @@ public class AppUpdater {
             }
         }
 
-        Uri apkUri = Uri.fromFile(apkFile);
+        // Disable FileUriExposedException on API 24+ for fallback
+        try {
+            if (Build.VERSION.SDK_INT >= 24) {
+                Method m = StrictMode.class.getMethod("disableDeathOnFileUriExposure");
+                m.invoke(null);
+            }
+        } catch (Exception ignored) {
+        }
+
+        Uri apkUri;
+        try {
+            if (Build.VERSION.SDK_INT >= 24) {
+                apkUri = Uri.parse("content://" + activity.getPackageName() + ".fileprovider/vdomov-update.apk");
+            } else {
+                apkUri = Uri.fromFile(apkFile);
+            }
+        } catch (Exception e) {
+            apkUri = Uri.fromFile(apkFile);
+        }
+
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
+        // Find System Package Installer to bypass App Chooser dialog
         PackageManager pm = activity.getPackageManager();
         List<ResolveInfo> resolveInfoList = pm.queryIntentActivities(intent, 0);
         String targetPackage = null;
@@ -257,36 +291,31 @@ public class AppUpdater {
                     pkgName.equals("com.android.packageinstaller") ||
                     pkgName.equals("com.samsung.android.packageinstaller") ||
                     pkgName.equals("com.miui.packageinstaller") ||
+                    pkgName.equals("com.oppo.packageinstaller") ||
+                    pkgName.equals("com.vivo.apkinstaller") ||
                     pkgName.contains("packageinstaller")) {
                     targetPackage = pkgName;
                     break;
-                }
-            }
-
-            if (targetPackage == null) {
-                for (ResolveInfo info : resolveInfoList) {
-                    String pkgName = info.activityInfo.packageName;
-                    if (pkgName.contains("installer")) {
-                        targetPackage = pkgName;
-                        break;
-                    }
                 }
             }
         }
 
         if (targetPackage != null) {
             intent.setPackage(targetPackage);
+            activity.grantUriPermission(targetPackage, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
         }
 
         try {
             activity.startActivity(intent);
         } catch (Exception e) {
             e.printStackTrace();
+            // Fallback: clear explicit package and launch generic installer intent
             try {
                 intent.setPackage(null);
                 activity.startActivity(intent);
             } catch (Exception ex) {
                 ex.printStackTrace();
+                Toast.makeText(activity, "Error launching Package Installer: " + ex.getMessage(), Toast.LENGTH_LONG).show();
             }
         }
     }

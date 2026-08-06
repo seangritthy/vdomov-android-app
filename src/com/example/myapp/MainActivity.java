@@ -207,6 +207,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try {
+            AppUpdater.checkResumeInstall(this);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     private void onHideCustomViewInternal() {
         if (customView == null) return;
         if (fullscreenContainer != null) {
