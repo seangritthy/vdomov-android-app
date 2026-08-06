@@ -67,6 +67,7 @@ apksigner sign \
 
 cp app-release.apk vdomov-mobile.apk
 cp app-release.apk vdomov-tv.apk
+cp app-release.apk vdomov-tablet.apk
 echo "=== BUILD SUCCESSFUL ==="
-echo "APK location: $APP_DIR/app-release.apk & $APP_DIR/vdomov-mobile.apk & $APP_DIR/vdomov-tv.apk"
-ls -lh app-release.apk vdomov-mobile.apk vdomov-tv.apk
+echo "APK location: $APP_DIR/app-release.apk & $APP_DIR/vdomov-mobile.apk & $APP_DIR/vdomov-tv.apk & $APP_DIR/vdomov-tablet.apk"
+ls -lh app-release.apk vdomov-mobile.apk vdomov-tv.apk vdomov-tablet.apk

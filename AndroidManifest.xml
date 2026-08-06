@@ -4,7 +4,15 @@
     android:versionCode="6"
     android:versionName="1.0.6">
 
-    <!-- Android TV hardware declaration (Touchscreen not required) -->
+    <!-- Tablet and Large Screen Support -->
+    <supports-screens
+        android:smallScreens="true"
+        android:normalScreens="true"
+        android:largeScreens="true"
+        android:xlargeScreens="true"
+        android:anyDensity="true" />
+
+    <!-- Android TV hardware declaration (Touchscreen optional) -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.type.television" android:required="false" />
 
@@ -23,11 +31,12 @@
         android:icon="@drawable/app_icon"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
+        android:resizeableActivity="true"
         android:theme="@android:style/Theme.NoTitleBar">
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
