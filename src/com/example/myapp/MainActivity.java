@@ -120,30 +120,29 @@ public class MainActivity extends Activity {
 
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
-                // Strictly block popups & new windows
                 return false;
             }
         });
 
         webView.loadUrl(TARGET_URL);
+
+        // Auto-check for new app updates in background
+        AppUpdater.checkForUpdates(this, false);
     }
 
     private boolean handleUrlNavigation(WebView view, String url) {
         if (url == null) return true;
 
-        // Block known ad/redirect URLs immediately
         if (AdBlocker.isAdOrRedirect(url)) {
             blockedCount.incrementAndGet();
-            return true; // Cancel navigation
+            return true;
         }
 
-        // Block intent/market/app store redirects from ad scripts
         String lowerUrl = url.toLowerCase();
         if (lowerUrl.startsWith("intent:") || lowerUrl.startsWith("market:") || lowerUrl.startsWith("play.google.com")) {
-            return true; // Block app store redirect popups
+            return true;
         }
 
-        // Allow navigation within target domain
         try {
             Uri uri = Uri.parse(url);
             String host = uri.getHost();
@@ -154,13 +153,11 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {
         }
 
-        // Default: load url safely inside webview without popping external browser
         view.loadUrl(url);
         return true;
     }
 
     private void injectAntiRedirectShield(WebView view) {
-        // JavaScript shield to kill window.open, popup redirects, clickjack overlays & redirect loops
         String jsShield = "javascript:(function() { " +
                 "window.open = function() { console.log('Blocked popup window.open'); return null; }; " +
                 "window.alert = function() {}; " +
