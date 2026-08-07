@@ -83,7 +83,7 @@ public class MainActivity extends Activity {
             
             webSettings.setJavaScriptCanOpenWindowsAutomatically(false);
             webSettings.setSupportMultipleWindows(false);
-            webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/3.0 AndroidTV VDOmov");
+            webSettings.setUserAgentString(webSettings.getUserAgentString() + " OriginGuardStrongShield/3.0 (AdGuardDNS/dns.adguard.com) AndroidTV VDOmov");
         } catch (Exception e) {
             e.printStackTrace();
         }

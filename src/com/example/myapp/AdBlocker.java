@@ -19,6 +19,11 @@ import java.util.regex.Pattern;
 
 public class AdBlocker {
 
+    public static final String ADGUARD_DNS_SERVER = "dns.adguard.com";
+    public static final String ADGUARD_DNS_IP_PRIMARY = "94.140.14.14";
+    public static final String ADGUARD_DNS_IP_SECONDARY = "94.140.15.15";
+    public static final String ADGUARD_DOH_ENDPOINT = "https://dns.adguard.com/dns-query";
+
     private static final Set<String> AD_HOSTS = new HashSet<>();
     private static boolean isInitialized = false;
     private static final AtomicInteger BLOCKED_COUNT = new AtomicInteger(0);
@@ -31,8 +36,9 @@ public class AdBlocker {
         Pattern.CASE_INSENSITIVE
     );
 
-    // Reliable Ad / Tracker Blocklist URL (StevenBlack hosts)
+    // Blocklist URLs (StevenBlack hosts + AdGuard DNS Filter List)
     private static final String BLOCKLIST_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+    private static final String ADGUARD_DNS_FILTER_URL = "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/DNSFilter/sections/adservers.txt";
 
     static {
         loadDefaultDomains();
@@ -83,6 +89,9 @@ public class AdBlocker {
                             AD_HOSTS.add(host);
                         }
                     }
+                } else if (line.startsWith("||") && line.endsWith("^")) {
+                    String host = line.substring(2, line.length() - 1).toLowerCase().trim();
+                    AD_HOSTS.add(host);
                 } else {
                     AD_HOSTS.add(line.toLowerCase());
                 }
@@ -96,42 +105,66 @@ public class AdBlocker {
         new AsyncTask<Void, Void, Boolean>() {
             @Override
             protected Boolean doInBackground(Void... params) {
+                boolean success = false;
+                File file = new File(context.getFilesDir(), "adblock_hosts.txt");
+                FileWriter writer = null;
                 try {
-                    URL url = new URL(BLOCKLIST_URL);
+                    writer = new FileWriter(file, false);
+
+                    // 1. Fetch StevenBlack Blocklist
+                    fetchAndAppendHostList(BLOCKLIST_URL, writer, 10000);
+
+                    // 2. Fetch AdGuard DNS Filter List
+                    fetchAndAppendHostList(ADGUARD_DNS_FILTER_URL, writer, 10000);
+
+                    writer.flush();
+                    success = true;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    if (writer != null) {
+                        try { writer.close(); } catch (Exception ignored) {}
+                    }
+                }
+                return success;
+            }
+
+            private void fetchAndAppendHostList(String urlStr, FileWriter writer, int maxCount) {
+                try {
+                    URL url = new URL(urlStr);
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                     conn.setConnectTimeout(8000);
                     conn.setReadTimeout(8000);
 
                     if (conn.getResponseCode() == 200) {
-                        File file = new File(context.getFilesDir(), "adblock_hosts.txt");
                         BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                        FileWriter writer = new FileWriter(file, false);
-
                         String line;
                         int count = 0;
-                        while ((line = reader.readLine()) != null && count < 15000) { // Limit to 15,000 domains for optimal performance
+                        while ((line = reader.readLine()) != null && count < maxCount) {
                             line = line.trim();
+                            if (line.isEmpty() || line.startsWith("#") || line.startsWith("!")) continue;
+
+                            String host = null;
                             if (line.startsWith("0.0.0.0 ") || line.startsWith("127.0.0.1 ")) {
                                 String[] parts = line.split("\\s+");
                                 if (parts.length >= 2) {
-                                    String host = parts[1].toLowerCase().trim();
-                                    if (!host.equals("localhost")) {
-                                        AD_HOSTS.add(host);
-                                        writer.write(host + "\n");
-                                        count++;
-                                    }
+                                    host = parts[1].toLowerCase().trim();
                                 }
+                            } else if (line.startsWith("||") && line.endsWith("^")) {
+                                host = line.substring(2, line.length() - 1).toLowerCase().trim();
+                            }
+
+                            if (host != null && !host.equals("localhost") && !host.contains("vdomov.com")) {
+                                AD_HOSTS.add(host);
+                                writer.write(host + "\n");
+                                count++;
                             }
                         }
                         reader.close();
-                        writer.flush();
-                        writer.close();
-                        return true;
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-                return false;
             }
 
             @Override
